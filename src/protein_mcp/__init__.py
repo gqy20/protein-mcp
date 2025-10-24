@@ -1,6 +1,6 @@
 """Protein MCP - 基于FastMCP的蛋白质数据访问工具"""
 
-__version__ = "0.1.2"
+__version__ = "0.1.3"
 __author__ = "gqy20"
 __email__ = "qingyu_ge@foxmail.com"
 
