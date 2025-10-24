@@ -87,7 +87,7 @@ class TestDataFlow:
     def test_protein_info_to_sequence_flow(self, mock_calculate, mock_http_request):
         """测试从蛋白质信息到序列的数据流"""
         # Mock蛋白质信息响应
-        mock_protein_response = {
+        mock_http_request.return_value = {
             "data": {
                 "polymer_entities": [
                     {
@@ -105,28 +105,6 @@ class TestDataFlow:
                                 "entity_id": "1",
                                 "asym_ids": ["A"],
                                 "auth_asym_ids": ["A"],
-                            },
-                        },
-                    }
-                ]
-            }
-        }
-
-        # Mock序列响应
-        mock_sequence_response = {
-            "data": {
-                "polymer_entities": [
-                    {
-                        "rcsb_id": "1ABC",
-                        "entity_polymer": {
-                            "rcsb_polymer_entity": {
-                                "sequence_1_letter": "ACDEFGHIKLMNPQRSTVWY",
-                                "sequence_3_letter": "ALA CYS ASP GLU PHE GLY HIS ILE LYS LEU MET ASN PRO GLN ARG SER THR VAL TRP TYR",
-                            },
-                            "rcsb_polymer_entity_container_identifiers": {
-                                "asym_ids": ["A"],
-                                "auth_asym_ids": ["A"],
-                                "entity_id": "1",
                             },
                         },
                     }
@@ -170,16 +148,17 @@ class TestErrorHandling:
             server = create_server(f"server-{i}", f"1.0.{i}")
             servers.append(server)
 
+        # 定义在循环外部的辅助函数
+        async def get_tools_count(test_server):
+            tools = await test_server.get_tools()
+            return tools
+
         # 验证所有服务器都正常创建
         for i, server in enumerate(servers):
             assert server.name == f"server-{i}"
             assert server.version == f"1.0.{i}"
 
-            async def get_tools_count():
-                tools = await server.get_tools()
-                return tools
-
-            tools = asyncio.run(get_tools_count())
+            tools = asyncio.run(get_tools_count(server))
             assert len(tools) == 6
 
     def test_tool_registration_consistency(self):

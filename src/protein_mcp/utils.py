@@ -265,7 +265,6 @@ def extract_sequence_from_pdb(pdb_file: str, chain_id: str | None = None) -> dic
                         "TYR",
                         "VAL",
                     ]:
-
                         if current_chain != chain:
                             # 保存前一个链的序列
                             if current_chain and current_sequence:
