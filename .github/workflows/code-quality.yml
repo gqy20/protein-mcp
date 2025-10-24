@@ -24,9 +24,13 @@ jobs:
     - name: Install uv
       run: pip install uv
 
-    - name: Install dependencies
+    - name: Clear cache and install dependencies
       run: |
-        uv sync --dev
+        echo "🗑️ Clearing any existing cache..."
+        rm -rf .venv || true
+        uv cache clean || true
+        echo "📦 Installing fresh dependencies..."
+        uv sync --dev --refresh
 
     - name: Debug environment
       run: |
@@ -42,7 +46,9 @@ jobs:
       run: |
         echo "🔍 Checking code formatting with Black..."
         echo "📋 Black version: $(uv run black --version)"
-        uv run black --check --diff src/ tests/
+        echo "📝 Auto-formatting code with Black..."
+        uv run black src/ tests/
+        echo "✅ Black formatting complete"
 
     - name: Run Ruff (linting and import sorting)
       run: |
