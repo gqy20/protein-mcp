@@ -19,7 +19,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.13'
 
     - name: Install uv
       run: pip install uv
@@ -42,9 +42,7 @@ jobs:
       run: |
         echo "🔍 Checking code formatting with Black..."
         echo "📋 Black version: $(uv run black --version)"
-        echo "⚠️ Temporarily skipping black check to unblock CI"
-        echo "Will re-enable after debugging format issues"
-        # uv run black --check --diff src/ tests/
+        uv run black --check --diff src/ tests/
 
     - name: Run Ruff (linting and import sorting)
       run: |
@@ -113,7 +111,7 @@ jobs:
     - name: Set up Python
       uses: actions/setup-python@v5
       with:
-        python-version: '3.10'
+        python-version: '3.13'
 
     - name: Install uv
       run: pip install uv
