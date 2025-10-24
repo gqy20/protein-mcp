@@ -28,9 +28,20 @@ jobs:
       run: |
         uv sync --dev
 
+    - name: Debug environment
+      run: |
+        echo "🔍 Debug information:"
+        echo "Python version: $(python --version)"
+        echo "uv version: $(uv --version)"
+        echo "Working directory: $(pwd)"
+        echo "Available Python files:"
+        find src/ tests/ -name "*.py" | head -10
+        echo "---"
+
     - name: Run Black (code formatting)
       run: |
         echo "🔍 Checking code formatting with Black..."
+        echo "📋 Black version: $(uv run black --version)"
         uv run black --check --diff src/ tests/
 
     - name: Run Ruff (linting and import sorting)
