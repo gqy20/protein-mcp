@@ -62,7 +62,13 @@ jobs:
         echo "Wheel distribution: $(ls dist/*.whl)"
 
         # Show package info
-        uvx --from dist/protein_mcp-*.whl protein-mcp --version || echo "Version info not available"
+        for wheel in dist/*.whl; do
+          if [ -f "$wheel" ]; then
+            echo "📦 Testing wheel: $wheel"
+            uvx --from "$wheel" protein-mcp --version || echo "Version info not available"
+            break
+          fi
+        done
 
     - name: Upload build artifacts
       uses: actions/upload-artifact@v4
@@ -198,7 +204,7 @@ jobs:
         echo "EOF" >> $GITHUB_OUTPUT
 
     - name: Create GitHub Release
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
@@ -230,14 +236,14 @@ jobs:
         prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
 
     - name: Upload Release Assets
-      uses: actions/upload-release-asset@v1
+      uses: softprops/action-gh-release@v2
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
-        upload_url: ${{ steps.create-release.outputs.upload_url }}
-        asset_path: ./dist/protein_mcp-1.0.0-py3-none-any.whl
-        asset_name: protein_mcp-1.0.0-py3-none-any.whl
-        asset_content_type: application/zip
+        files: |
+          dist/*
+        draft: false
+        prerelease: ${{ contains(steps.version.outputs.version, 'alpha') || contains(steps.version.outputs.version, 'beta') || contains(steps.version.outputs.version, 'rc') }}
 
   notify-discord:
     runs-on: ubuntu-latest
