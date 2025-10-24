@@ -1,16 +1,18 @@
 """FastMCP服务器主逻辑"""
 
 import argparse
-import asyncio
 
 from fastmcp import FastMCP
 
 from .tools import register_all_tools
 
 
-def create_server(name: str = "protein-mcp", version: str = "0.1.0") -> FastMCP:
+def create_server(name: str = "protein-mcp", version: str = "0.1.5") -> FastMCP:
     """创建并配置FastMCP服务器实例"""
-    mcp = FastMCP(name=name, version=version)
+    mcp = FastMCP(
+        name=name,
+        version=version,
+    )
 
     # 注册所有工具
     register_all_tools(mcp)
@@ -29,28 +31,30 @@ def main() -> None:
     )
     parser.add_argument("--port", type=int, default=8080, help="服务器端口 (默认: 8080)")
     parser.add_argument("--host", default="0.0.0.0", help="服务器主机 (默认: 0.0.0.0)")
-    parser.add_argument("--name", default="protein-mcp", help="服务器名称 (默认: protein-mcp)")
-    parser.add_argument("--version", default="0.1.0", help="服务器版本 (默认: 0.1.0)")
+    parser.add_argument("--name", default="protein-mcp", help="服务器名称")
 
     args = parser.parse_args()
 
+    # 从 __init__.py 导入版本，避免硬编码
+    from . import __version__
+
     # 创建服务器
-    mcp = create_server(args.name, args.version)
+    mcp = create_server(args.name, __version__)
 
     print("🧬 启动 Protein MCP Server")
-    print(f"📦 版本: {args.version}")
+    print(f"📦 版本: {__version__}")
     print(f"🌐 传输协议: {args.transport}")
 
     try:
         if args.transport == "stdio":
             print("🔌 STDIO模式启动")
-            mcp.run()
+            mcp.run(transport="stdio")
         elif args.transport == "http":
             print(f"🌐 HTTP模式启动: http://{args.host}:{args.port}")
-            asyncio.run(mcp.run_http_async(host=args.host, port=args.port))
+            mcp.run(transport="http", host=args.host, port=args.port)
         elif args.transport == "sse":
             print(f"📡 SSE模式启动: http://{args.host}:{args.port}")
-            asyncio.run(mcp.run_sse_async(host=args.host, port=args.port))
+            mcp.run(transport="sse", host=args.host, port=args.port)
     except KeyboardInterrupt:
         print("\n👋 服务器已停止")
     except Exception as e:

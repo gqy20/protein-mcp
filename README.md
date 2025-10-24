@@ -35,7 +35,7 @@ uvx protein-mcp --help
 pip install protein-mcp
 
 # 安装指定版本
-pip install protein-mcp==0.1.0
+pip install protein-mcp==0.1.5
 
 # 升级到最新版本
 pip install --upgrade protein-mcp
@@ -411,7 +411,7 @@ from protein_mcp import create_server
 # 创建自定义服务器实例
 server = create_server(
     name="my-protein-server",
-    version="0.1.0"
+    version="0.1.5"
 )
 
 # 启动服务器

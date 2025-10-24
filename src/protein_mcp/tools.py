@@ -6,6 +6,8 @@
 import json
 from typing import Any
 
+from fastmcp import Context
+
 from .utils import (
     calculate_dssp,
     download_file,
@@ -85,11 +87,12 @@ def _search_rcsb_structures(keywords: str, max_results: int = 10) -> list[dict[s
         return []
 
 
-def find_protein_structures(
+async def find_protein_structures(
     keywords: str | None = None,
     category: str | None = None,
     pdb_id: str | None = None,
     max_results: int = 10,
+    ctx: Context | None = None,
 ) -> dict[str, Any]:
     """
     蛋白质结构发现工具 - 搜索、示例、验证的统一入口
@@ -101,28 +104,40 @@ def find_protein_structures(
         category: 预设类别 ("癌症靶点", "病毒蛋白", "酶类", "抗体", "膜蛋白", "核糖体")
         pdb_id: 直接验证或查看特定PDB ID (如: "1A3N")
         max_results: 搜索结果最大数量 (默认10，最大100)
+        ctx: FastMCP Context，用于进度反馈和日志记录
 
     Returns:
         包含PDB结构列表、验证结果、示例数据的综合响应
     """
     try:
+        if ctx:
+            await ctx.info(f"🔍 开始蛋白质结构搜索...")
         # 限制max_results范围
         max_results = min(max(max_results, 1), 100)
 
         # 模式1: 验证特定PDB ID
         if pdb_id:
+            if ctx:
+                await ctx.info(f"📋 验证 PDB ID: {pdb_id}")
+
             if not validate_pdb_id(pdb_id):
+                if ctx:
+                    await ctx.error(f"❌ 无效的PDB ID格式: {pdb_id}")
                 return format_error_response(
                     "无效的PDB ID格式",
                     f"期望格式: 4位字符 (首位数字，后三位可数字可字母)，实际: {pdb_id}",
                 )
 
             if _validate_pdb_exists(pdb_id):
+                if ctx:
+                    await ctx.info(f"🔍 获取蛋白质详细信息...")
                 entry_info = _get_entry_info(pdb_id)
                 title = "未知标题"
                 if entry_info and "struct" in entry_info:
                     title = entry_info["struct"].get("title", "未知标题")
 
+                if ctx:
+                    await ctx.info(f"✅ PDB ID {pdb_id} 验证成功")
                 return format_success_response(
                     {
                         "mode": "validation",
@@ -134,12 +149,17 @@ def find_protein_structures(
                     f"PDB ID {pdb_id} 验证成功，结构存在于RCSB数据库",
                 )
             else:
+                if ctx:
+                    await ctx.error(f"❌ PDB ID {pdb_id} 不存在")
                 return format_error_response(
                     "PDB ID不存在", f"PDB ID {pdb_id} 在RCSB数据库中未找到"
                 )
 
         # 模式2: 分类示例
         elif category:
+            if ctx:
+                await ctx.info(f"📚 获取 {category} 类别的蛋白质示例...")
+
             # 预定义的分类示例数据库
             category_examples = {
                 "癌症靶点": {
@@ -170,6 +190,8 @@ def find_protein_structures(
                 )
 
             examples = category_examples[category]
+            if ctx:
+                await ctx.info(f"✅ 找到 {len(examples)} 个 {category} 示例")
             return format_success_response(
                 {
                     "mode": "category_examples",
@@ -182,8 +204,13 @@ def find_protein_structures(
 
         # 模式3: 关键词搜索
         elif keywords:
+            if ctx:
+                await ctx.info(f"🔍 搜索关键词: {keywords}")
+
             results = _search_rcsb_structures(keywords, max_results)
             if results:
+                if ctx:
+                    await ctx.info(f"✅ 找到 {len(results)} 个匹配的结构")
                 return format_success_response(
                     {
                         "mode": "search",
@@ -194,12 +221,17 @@ def find_protein_structures(
                     f"找到 {len(results)} 个匹配的结构",
                 )
             else:
+                if ctx:
+                    await ctx.error(f"❌ 使用关键词 '{keywords}' 未找到匹配结果")
                 return format_error_response(
                     "未找到匹配结果", f"使用关键词 '{keywords}' 未找到匹配的PDB结构"
                 )
 
         # 模式4: 默认 - 返回热门示例
         else:
+            if ctx:
+                await ctx.info("📋 提供热门蛋白质结构示例...")
+
             popular_examples = {
                 "经典蛋白质": {
                     "血红蛋白": ["1A3N", "2HHB"],
@@ -214,6 +246,8 @@ def find_protein_structures(
                 },
             }
 
+            if ctx:
+                await ctx.info("✅ 返回热门示例和使用指南")
             return format_success_response(
                 {
                     "mode": "default_examples",
@@ -229,11 +263,13 @@ def find_protein_structures(
             )
 
     except Exception as e:
+        if ctx:
+            await ctx.error(f"❌ 搜索失败: {str(e)}")
         return format_error_response("工具执行错误", f"find_protein_structures 执行失败: {str(e)}")
 
 
-def get_protein_data(
-    pdb_id: str, data_types: list[str], chain_id: str | None = None
+async def get_protein_data(
+    pdb_id: str, data_types: list[str], chain_id: str | None = None, ctx: Context | None = None
 ) -> dict[str, Any]:
     """
     蛋白质综合数据工具 - 获取完整蛋白质信息包
@@ -248,11 +284,15 @@ def get_protein_data(
             - "structure": 二级结构分析
             - "all": 获取所有数据
         chain_id: 特定链ID (例如: "A"，可选)
+        ctx: FastMCP Context，用于进度反馈和日志记录
 
     Returns:
         完整的蛋白质数据包，包含请求的所有数据类型
     """
     try:
+        if ctx:
+            await ctx.info(f"📊 开始获取蛋白质数据: {pdb_id}")
+            await ctx.report_progress(0, 100, "初始化...")
         if not validate_pdb_id(pdb_id):
             return format_error_response(
                 "无效的PDB ID格式",
@@ -265,12 +305,18 @@ def get_protein_data(
 
         # 验证PDB ID存在性
         if not _validate_pdb_exists(pdb_id):
+            if ctx:
+                await ctx.error(f"❌ PDB ID {pdb_id} 不存在")
             return format_error_response("PDB ID不存在", f"PDB ID {pdb_id} 在RCSB数据库中未找到")
 
         result_data = {}
 
         # 获取基本信息
         if "basic" in data_types:
+            if ctx:
+                await ctx.report_progress(25, 100, "获取基本信息...")
+                await ctx.info(f"🔍 查询 {pdb_id} 基本信息...")
+
             entry_info = _get_entry_info(pdb_id)
             if entry_info:
                 struct_data = entry_info.get("struct", {})
@@ -284,12 +330,18 @@ def get_protein_data(
                         author.get("name", "未知") for author in entry_info.get("audit_author", [])
                     ],
                 }
+                if ctx:
+                    await ctx.info("✅ 基本信息获取完成")
             else:
                 result_data["basic"] = {"error": "无法获取基本信息"}
 
         # 获取序列信息
         if "sequence" in data_types:
             try:
+                if ctx:
+                    await ctx.report_progress(50, 100, "提取序列信息...")
+                    await ctx.info("🧬 下载并解析PDB文件...")
+
                 # 下载PDB文件并提取序列
                 pdb_url = f"{RCSB_DOWNLOAD_URL}/{pdb_id}.pdb"
                 local_pdb_file = f"{pdb_id}.pdb"
@@ -303,6 +355,8 @@ def get_protein_data(
                             "sequence_3_letter": sequence_data.get("sequence_3_letter", ""),
                             "length": sequence_data.get("length", 0),
                         }
+                        if ctx:
+                            await ctx.info(f"✅ 序列信息提取完成 (长度: {sequence_data.get('length', 0)})")
                     else:
                         result_data["sequence"] = {"error": "无法提取序列信息"}
                 else:
@@ -315,6 +369,10 @@ def get_protein_data(
             if "sequence" in result_data and "sequence_1_letter" in result_data["sequence"]:
                 sequence = result_data["sequence"]["sequence_1_letter"]
                 try:
+                    if ctx:
+                        await ctx.report_progress(75, 100, "分析二级结构...")
+                        await ctx.info("🔬 执行DSSP二级结构分析...")
+
                     secondary_structure = calculate_dssp(pdb_id, sequence)
                     result_data["structure"] = {
                         "dssp_prediction": secondary_structure,
@@ -325,6 +383,8 @@ def get_protein_data(
                             "coil": secondary_structure.count("C"),
                         },
                     }
+                    if ctx:
+                        await ctx.info("✅ 二级结构分析完成")
                 except Exception as e:
                     result_data["structure"] = {"error": f"二级结构分析失败: {str(e)}"}
             else:
@@ -335,6 +395,10 @@ def get_protein_data(
             dt for dt in data_types if dt in result_data and "error" not in result_data[dt]
         ]
         success_rate = len(successful_types) / len(data_types) * 100 if data_types else 0
+
+        if ctx:
+            await ctx.report_progress(100, 100, "完成")
+            await ctx.info(f"✅ 成功获取 {pdb_id} 的数据 ({success_rate:.0f}% 成功率)")
 
         return format_success_response(
             {
@@ -348,11 +412,13 @@ def get_protein_data(
         )
 
     except Exception as e:
+        if ctx:
+            await ctx.error(f"❌ 数据获取失败: {str(e)}")
         return format_error_response("数据获取错误", f"get_protein_data 执行失败: {str(e)}")
 
 
-def download_structure(
-    pdb_id: str, file_format: str = "pdb", save_local: bool = False
+async def download_structure(
+    pdb_id: str, file_format: str = "pdb", save_local: bool = False, ctx: Context | None = None
 ) -> dict[str, Any]:
     """
     结构文件工具 - 下载和管理蛋白质结构文件
@@ -367,11 +433,15 @@ def download_structure(
             - "cif": 晶体信息文件格式
             - "mmtf": 大分子传输格式 (二进制，速度快)
         save_local: 是否保存到本地文件 (默认False返回内容)
+        ctx: FastMCP Context，用于进度反馈和日志记录
 
     Returns:
         文件内容或下载信息 + 格式说明和使用指南
     """
     try:
+        if ctx:
+            await ctx.info(f"📁 开始下载结构文件: {pdb_id}.{file_format}")
+            await ctx.report_progress(0, 100, "初始化下载...")
         if not validate_pdb_id(pdb_id):
             return format_error_response(
                 "无效的PDB ID格式",
@@ -380,11 +450,15 @@ def download_structure(
 
         # 验证PDB ID存在性
         if not _validate_pdb_exists(pdb_id):
+            if ctx:
+                await ctx.error(f"❌ PDB ID {pdb_id} 不存在")
             return format_error_response("PDB ID不存在", f"PDB ID {pdb_id} 在RCSB数据库中未找到")
 
         # 验证文件格式
         supported_formats = get_supported_formats()
         if file_format not in supported_formats:
+            if ctx:
+                await ctx.error(f"❌ 不支持的文件格式: {file_format}")
             return format_error_response(
                 "不支持的文件格式", f"支持格式: {', '.join(supported_formats)}"
             )
@@ -393,8 +467,14 @@ def download_structure(
         download_url = f"{RCSB_DOWNLOAD_URL}/{pdb_id}.{file_format}"
         local_filename = f"{pdb_id}.{file_format}"
 
+        if ctx:
+            await ctx.report_progress(50, 100, f"下载 {file_format.upper()} 格式文件...")
+
         # 下载文件
         if save_local:
+            if ctx:
+                await ctx.info(f"💾 保存到本地: {local_filename}")
+
             success = download_file(download_url, local_filename)
             if success:
                 result_data = {
@@ -404,13 +484,20 @@ def download_structure(
                     "download_method": "saved_local",
                     "file_size": None,  # 可以添加文件大小信息
                 }
+                if ctx:
+                    await ctx.info(f"✅ 文件保存成功: {local_filename}")
             else:
+                if ctx:
+                    await ctx.error(f"❌ 文件下载失败: {local_filename}")
                 return format_error_response(
                     "文件下载失败", f"无法下载 {pdb_id}.{file_format} 文件"
                 )
         else:
             # 返回文件内容（对于小文件）
             try:
+                if ctx:
+                    await ctx.info("🌐 从远程获取文件内容预览...")
+
                 import requests
 
                 response = requests.get(download_url, timeout=30)
@@ -427,11 +514,17 @@ def download_structure(
                         ),
                         "content_preview": True,
                     }
+                    if ctx:
+                        await ctx.info(f"✅ 文件内容获取成功 (预览: {len(response.text)} 字符)")
                 else:
+                    if ctx:
+                        await ctx.error(f"❌ HTTP错误: {response.status_code}")
                     return format_error_response(
                         "文件下载失败", f"HTTP {response.status_code}: 无法访问文件"
                     )
             except Exception as e:
+                if ctx:
+                    await ctx.error(f"❌ 网络错误: {str(e)}")
                 return format_error_response("网络错误", f"下载失败: {str(e)}")
 
         # 添加格式信息
@@ -477,12 +570,18 @@ def download_structure(
             },
         )
 
+        if ctx:
+            await ctx.report_progress(100, 100, "完成")
+            await ctx.info(f"✅ 成功获取 {pdb_id} 的 {file_format} 格式文件")
+
         return format_success_response(
             result_data,
             f"成功获取 {pdb_id} 的 {file_format} 格式文件。{format_info.get(file_format, {}).get('description', '')}",
         )
 
     except Exception as e:
+        if ctx:
+            await ctx.error(f"❌ 文件操作失败: {str(e)}")
         return format_error_response("文件操作错误", f"download_structure 执行失败: {str(e)}")
 
 
@@ -501,11 +600,12 @@ def register_all_tools(mcp) -> None:
 
     # 工具1: 蛋白质结构发现工具 - 整合搜索、示例、验证功能
     @mcp.tool()
-    def find_protein_structures_tool(
+    async def find_protein_structures_tool(
         keywords: str | None = None,
         category: str | None = None,
         pdb_id: str | None = None,
         max_results: int = 10,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
         蛋白质结构发现工具 - 搜索、示例、验证的统一入口
@@ -517,6 +617,7 @@ def register_all_tools(mcp) -> None:
             category: 预设类别 ("癌症靶点", "病毒蛋白", "酶类", "抗体", "膜蛋白", "核糖体")
             pdb_id: 直接验证或查看特定PDB ID (如: "1A3N")
             max_results: 搜索结果最大数量 (默认10，最大100)
+            ctx: FastMCP Context，用于进度反馈和日志记录
 
         Returns:
             包含PDB结构列表、验证结果、示例数据的综合响应
@@ -531,14 +632,15 @@ def register_all_tools(mcp) -> None:
             # 验证PDB ID
             find_protein_structures(pdb_id="1A3N")
         """
-        return find_protein_structures(keywords, category, pdb_id, max_results)
+        return await find_protein_structures(keywords, category, pdb_id, max_results, ctx)
 
     # 工具2: 蛋白质综合数据工具 - 一次获取所有蛋白质信息
     @mcp.tool()
-    def get_protein_data_tool(
+    async def get_protein_data_tool(
         pdb_id: str,
         data_types: list[str] | None = None,
         chain_id: str | None = None,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
         蛋白质综合数据工具 - 获取完整蛋白质信息包
@@ -553,6 +655,7 @@ def register_all_tools(mcp) -> None:
                 - "structure": 二级结构分析
                 - "all": 获取所有数据
             chain_id: 特定链ID (例如: "A"，可选)
+            ctx: FastMCP Context，用于进度反馈和日志记录
 
         Returns:
             完整的蛋白质数据包，包含请求的所有数据类型
@@ -570,12 +673,15 @@ def register_all_tools(mcp) -> None:
         # 如果没有指定数据类型，默认获取基本数据
         if data_types is None:
             data_types = ["basic", "sequence", "structure"]
-        return get_protein_data(pdb_id, data_types, chain_id)
+        return await get_protein_data(pdb_id, data_types, chain_id, ctx)
 
     # 工具3: 结构文件工具 - 下载和管理蛋白质结构文件
     @mcp.tool()
-    def download_structure_tool(
-        pdb_id: str, file_format: str = "pdb", save_local: bool = False
+    async def download_structure_tool(
+        pdb_id: str,
+        file_format: str = "pdb",
+        save_local: bool = False,
+        ctx: Context | None = None,
     ) -> dict[str, Any]:
         """
         结构文件工具 - 下载和管理蛋白质结构文件
@@ -590,6 +696,7 @@ def register_all_tools(mcp) -> None:
                 - "cif": 晶体信息文件格式
                 - "mmtf": 大分子传输格式 (二进制，速度快)
             save_local: 是否保存到本地文件 (默认False返回内容)
+            ctx: FastMCP Context，用于进度反馈和日志记录
 
         Returns:
             文件内容或下载信息 + 格式说明和使用指南
@@ -604,4 +711,4 @@ def register_all_tools(mcp) -> None:
             # 获取快速MMTF格式
             download_structure("6VSB", "mmtf")
         """
-        return download_structure(pdb_id, file_format, save_local)
+        return await download_structure(pdb_id, file_format, save_local, ctx)
